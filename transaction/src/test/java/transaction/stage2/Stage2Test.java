@@ -37,6 +37,7 @@ class Stage2Test {
 
     /**
      * 생성된 트랜잭션이 몇 개인가?
+     * required에서는 부모가 있으면 자식이 이어서 transaction이 연결되므로 하나.
      * 왜 그런 결과가 나왔을까?
      */
     @Test
@@ -45,12 +46,13 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(1)
+                .containsExactly("transaction.stage2.FirstUserService.saveFirstTransactionWithRequired");
     }
 
     /**
-     * 생성된 트랜잭션이 몇 개인가?
+     * 생성된 트랜잭션이 몇 개인가? => 2개
+     * required new는 매번 새로운 transaction을 만듬
      * 왜 그런 결과가 나왔을까?
      */
     @Test
@@ -59,26 +61,31 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(2)
+                .containsExactly("transaction.stage2.FirstUserService.saveFirstTransactionWithRequiredNew");
     }
 
     /**
      * firstUserService.saveAndExceptionWithRequiredNew()에서 강제로 예외를 발생시킨다.
+     * 예외가 발생하면 어차피 별개의 tranasction이기 때문에 영향이 없음. 따라서 firstService에서 save한건 롤백, 두번째는 살아있음
      * REQUIRES_NEW 일 때 예외로 인한 롤백이 발생하면서 어떤 상황이 발생하는 지 확인해보자.
      */
     @Test
     void testRequiredNewWithRollback() {
-        assertThat(firstUserService.findAll()).hasSize(-1);
+        assertThat(firstUserService.findAll()).hasSize(0);
 
         assertThatThrownBy(() -> firstUserService.saveAndExceptionWithRequiredNew())
                 .isInstanceOf(RuntimeException.class);
 
-        assertThat(firstUserService.findAll()).hasSize(-1);
+        assertThat(firstUserService.findAll()).hasSize(1);
     }
 
     /**
      * FirstUserService.saveFirstTransactionWithSupports() 메서드를 보면 @Transactional이 주석으로 되어 있다.
+     * secondService가 SUPPORTS이기 떄문에 있으면 transaction 진행하고 없으면 그냥 한다.
+     * transaction 있는 상태 -> transaction.stage2.FirstUserService.saveFirstTransactionWithSupports
+     * transaction 없는 상태 -> transaction.stage2.SecondUserService.saveSecondTransactionWithSupports
+     * 즉, transaction이 있으면 참여함. 근데 왜... transaction 없으면 없이 한다는데 생기지?
      * 주석인 상태에서 테스트를 실행했을 때와 주석을 해제하고 테스트를 실행했을 때 어떤 차이점이 있는지 확인해보자.
      */
     @Test
@@ -87,14 +94,15 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(1)
+                .containsExactly("transaction.stage2.FirstUserService.saveFirstTransactionWithSupports");
     }
 
     /**
      * FirstUserService.saveFirstTransactionWithMandatory() 메서드를 보면 @Transactional이 주석으로 되어 있다.
      * 주석인 상태에서 테스트를 실행했을 때와 주석을 해제하고 테스트를 실행했을 때 어떤 차이점이 있는지 확인해보자.
      * SUPPORTS와 어떤 점이 다른지도 같이 챙겨보자.
+     * 있으면 참여하고 없으면 에러 발생시킨다. -> 혼자 실행하면 안될때 사용 가능
      */
     @Test
     void testMandatory() {
@@ -102,8 +110,8 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(1)
+                .containsExactly("transaction.stage2.FirstUserService.saveFirstTransactionWithMandatory");
     }
 
     /**
@@ -112,6 +120,9 @@ class Stage2Test {
      * 다시 테스트를 실행하면 몇 개의 물리적 트랜잭션이 동작할까?
      *
      * 스프링 공식 문서에서 물리적 트랜잭션과 논리적 트랜잭션의 차이점이 무엇인지 찾아보자.
+     *
+     * 주석 전 -> 2개 나옴
+     * 주석 후 -> 1개 나옴
      */
     @Test
     void testNotSupported() {
@@ -119,8 +130,8 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(1)
+                .containsExactly("transaction.stage2.SecondUserService.saveSecondTransactionWithNotSupported");
     }
 
     /**
@@ -133,12 +144,14 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(1)
+                .containsExactly("transaction.stage2.SecondUserService.saveSecondTransactionWithNested");
     }
 
     /**
      * 마찬가지로 @Transactional을 주석처리하면서 관찰해보자.
+     * Transaction이 있으면 예외를 발생시키며 사용하지 않도록 강제한다.
+     * Never는 이미 진행중인 transacion이 있으면 예외를 발생시킨다.
      */
     @Test
     void testNever() {
@@ -146,7 +159,7 @@ class Stage2Test {
 
         log.info("transactions : {}", actual);
         assertThat(actual)
-                .hasSize(0)
-                .containsExactly("");
+                .hasSize(1)
+                .containsExactly("transaction.stage2.SecondUserService.saveSecondTransactionWithNever");
     }
 }
